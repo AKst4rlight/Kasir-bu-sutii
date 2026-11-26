@@ -20,16 +20,36 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android SDK packages
-        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'platform-tools'
-
       - name: Set up Gradle 8.7
-        uses: gradle/actions/setup-gradle@v6
+        uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.7'
+
+      # Use the Android SDK already installed on GitHub-hosted Ubuntu runners.
+      # This avoids the setup-android action path that failed while installing
+      # the obsolete SDK package named "tools".
+      - name: Locate Android SDK tools
+        shell: bash
+        run: |
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
+          SDKMANAGER="$(find "$SDK_ROOT" -type f -name sdkmanager 2>/dev/null | head -n 1)"
+          if [ -z "$SDKMANAGER" ]; then
+            echo "ERROR: sdkmanager tidak ditemukan di $SDK_ROOT"
+            exit 1
+          fi
+          echo "$(dirname "$SDKMANAGER")" >> "$GITHUB_PATH"
+          echo "SDKMANAGER=$SDKMANAGER" >> "$GITHUB_ENV"
+
+      - name: Accept licenses and install Android SDK packages
+        shell: bash
+        run: |
+          yes | "$SDKMANAGER" --licenses || true
+          "$SDKMANAGER" --install \
+            'platform-tools' \
+            'platforms;android-35' \
+            'build-tools;35.0.0'
 
       - name: Extract app project
         run: unzip -o Kasir_Bu_Suti_Android_Project.zip -d .
